@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <title>Chat-GPT Feito em Casa</title>
+    <style>
+        body, pre {
+            background-color: black;
+            color: azure;
+        }
+        #response {
+            font-family: Arial, sans-serif;
+            font-size: 1.2em;
+            margin-top: 20px;
+            white-space: pre-wrap;
+        }
+        #loading {
+            display: none;
+            font-size: 1.1em;
+            color: yellow;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Chat-GPT Feito em Casa</h1>
+    <input type="text" id="pergunta" placeholder="Digite sua pergunta" />
+    <button id="sendButton" onclick="sendQuestion()">Enviar</button>
+    <div id="chat">
+        <pre id="response"></pre>
+        <div id="loading">Processando... Aguarde.</div>
+    </div>
+    
+    <script>
+        function sendQuestion() {
+            const pergunta = document.getElementById('pergunta').value;
+            const sendButton = document.getElementById('sendButton');
+            const loadingElement = document.getElementById('loading');
+            const responseElement = document.getElementById('response');
+
+            if (!pergunta.trim()) {
+                alert('Por favor, digite uma pergunta.');
+                return;
+            }
+
+            responseElement.textContent = '';
+            loadingElement.style.display = 'block';
+            sendButton.disabled = true;
+
+            const eventSource = new EventSource(`backend/ask-sse-stream?question=${encodeURIComponent(pergunta)}`);
+
+            eventSource.onmessage = function(event) {
+                loadingElement.style.display = 'none';
+                sendButton.disabled = false;
+                if (event.data === '[END]') {
+                    eventSource.close();
+                    return;
+                }
+
+                responseElement.textContent += event.data + ' ';
+            };
+
+            eventSource.onerror = function(err) {
+                console.error("EventSource falhou:", err);
+                loadingElement.style.display = 'none';
+                sendButton.disabled = false;
+                eventSource.close();
+                alert('Houve um problema ao processar sua solicitação. Tente novamente mais tarde.');
+            };
+
+            
+        }
+    </script>
+</body>
+</html>

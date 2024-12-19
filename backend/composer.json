@@ -1,0 +1,20 @@
+{
+    "name": "chat/x",
+    "description": "false",
+    "type": "no",
+    "license": "MIT",
+    "autoload": {
+        "psr-4": {
+            "Chat\\X\\": "./"
+        }
+    },
+    "authors": [
+        {
+            "name": "faustinopsy",
+            "email": "rodrigohipnose@gmail.com"
+        }
+    ],
+    "require": {
+        "php-ai/php-ml": "^0.10.0"
+    }
+}
