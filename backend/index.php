@@ -51,7 +51,7 @@ function extractInitialContext($questao) {
     $initialpalavraContexto = array_slice($palavrasQuestao, -2, 2);
     $contextoInicial = implode(' ', $initialpalavraContexto);
     if (count($initialpalavraContexto) < 2) {
-        $contextoInicial .= ' contexto';
+        $contextoInicial .= ' > ';
     }
     return $contextoInicial;
 }

@@ -6,7 +6,6 @@ use Phpml\FeatureExtraction\TokenCountVectorizer;
 use Phpml\FeatureSelection\SelectKBest;
 use Phpml\FeatureSelection\ScoringFunction\ANOVAFValue;
 use Phpml\Tokenization\WordTokenizer;
-use Phpml\Transformer;
 
 class NextWordPredictor
 {
@@ -20,10 +19,18 @@ class NextWordPredictor
         $this->ngramFile = $ngramFile;
         $this->model = new NaiveBayes();
         $this->vectorizer = new TokenCountVectorizer(new WordTokenizer());
-        $this->featureSelector = new SelectKBest(5000, new ANOVAFValue());
+        $this->featureSelector = new SelectKBest(25000, new ANOVAFValue());
     }
 
-    public function prepareTrainingData(): array
+    /**
+     * Prepara os dados de treinamento a partir do JSON de n-grams.
+     * 
+     * @param bool $onlyFrequent Se true, considera apenas n-grams cuja frequência seja >= $minNgramFrequency.
+     * @param int  $minNgramFrequency Valor mínimo para a frequência do n-gram (apenas se $onlyFrequent for true).
+     * 
+     * @return array [array $trainingData, array $labels]
+     */
+    public function prepareTrainingData(bool $onlyFrequent = false, int $minNgramFrequency = 50): array
     {
         $data = json_decode(file_get_contents($this->ngramFile), true);
         if ($data === null) {
@@ -31,12 +38,17 @@ class NextWordPredictor
             return [[], []];
         }
         echo "Total de n-grams carregados: " . count($data) . "\n";
+
         $trainingData = [];
         $labels = [];
         $classFrequencies = [];
         $sample = 0;
         
         foreach ($data as $ngram => $freq) {
+            if ($onlyFrequent && $freq < $minNgramFrequency) {
+                continue;
+            }
+            
             $words = explode(' ', $ngram);
             if (count($words) >= 3) { // Verifica se é um 3-gram
                 $context = trim(implode(' ', array_slice($words, 0, 2))); // Primeiro e segundo termos como contexto
@@ -61,8 +73,7 @@ class NextWordPredictor
             }
         }
 
-
-        $minClassFrequency = 5;
+        $minClassFrequency = 50;
         echo "Filtrando classes com menos de {$minClassFrequency} amostras...\n";
         $filteredTrainingData = [];
         $filteredLabels = [];
@@ -77,38 +88,37 @@ class NextWordPredictor
         return [$filteredTrainingData, $filteredLabels];
     }
 
-
-    public function train(): void
+    /**
+     * Treina o modelo.
+     *
+     * @param bool $onlyFrequent Se true, treina utilizando apenas os n-grams mais frequentes.
+     * @param int  $minNgramFrequency Frequência mínima do n-gram a ser considerado (se $onlyFrequent for true).
+     */
+    public function train(bool $onlyFrequent = false, int $minNgramFrequency = 50): void
     {
-        list($contexts, $labels) = $this->prepareTrainingData();
+        list($contexts, $labels) = $this->prepareTrainingData($onlyFrequent, $minNgramFrequency);
         if (empty($contexts)) {
             echo "Nenhum dado para treinar.\n";
             return;
         }
         echo "Iniciando o treinamento do modelo...\n";
         try {
-            // Ajustar o vetor para treinamento
             $this->vectorizer->fit($contexts);
             $this->vectorizer->transform($contexts);
             echo "Vectorizer transformado. Exemplos: " . count($contexts) . "\n";
     
-            // Remover características com variância zero
             $this->removeZeroVarianceFeatures($contexts);
     
-            // Selecionar as características mais relevantes
             $this->featureSelector->fit($contexts, $labels);
             $this->featureSelector->transform($contexts);
             echo "Feature Selector aplicado. Exemplos: " . count($contexts) . "\n";
     
-            // Treinar o modelo com as características selecionadas
             $this->model->train($contexts, $labels);
             echo "Treinamento concluído.\n";
         } catch (\Exception $e) {
             echo "Erro durante o treinamento: " . $e->getMessage() . "\n";
         }
     }
-    
-    
 
     public function saveModel(string $modelPath, string $vectorizerPath, string $featureSelectorPath): void
     {
@@ -157,7 +167,6 @@ class NextWordPredictor
             return;
         }
 
-        //echo "Tentando ler o modelo de '{$modelPath}'...\n";
         $modelContent = file_get_contents($modelPath);
         if ($modelContent === false) {
             echo "Falha ao ler o arquivo do modelo: '{$modelPath}'.\n";
@@ -168,9 +177,7 @@ class NextWordPredictor
             echo "Falha ao deserializar o modelo de '{$modelPath}'.\n";
             return;
         }
-        //echo "Modelo deserializado com sucesso.\n";
 
-        //echo "Tentando ler o vectorizer de '{$vectorizerPath}'...\n";
         $vectorizerContent = file_get_contents($vectorizerPath);
         if ($vectorizerContent === false) {
             echo "Falha ao ler o arquivo do vectorizer: '{$vectorizerPath}'.\n";
@@ -181,9 +188,7 @@ class NextWordPredictor
             echo "Falha ao deserializar o vectorizer de '{$vectorizerPath}'.\n";
             return;
         }
-        //echo "Vectorizer deserializado com sucesso.\n";
 
-        //echo "Tentando ler o feature selector de '{$featureSelectorPath}'...\n";
         $featureSelectorContent = file_get_contents($featureSelectorPath);
         if ($featureSelectorContent === false) {
             echo "Falha ao ler o arquivo do feature selector: '{$featureSelectorPath}'.\n";
@@ -194,28 +199,16 @@ class NextWordPredictor
             echo "Falha ao deserializar o feature selector de '{$featureSelectorPath}'.\n";
             return;
         }
-       // echo "Feature selector deserializado com sucesso.\n";
-
-        //echo "Modelos carregados de '{$modelPath}', '{$vectorizerPath}' e '{$featureSelectorPath}'.\n";
     }
 
     public function predict(string $context): ?string
     {
-        //echo "Iniciando predição para o contexto: '{$context}'\n";
         $context = strtolower($context);
         $vector = [$context];
         
-        //echo "Aplicando vectorizer...\n";
         $this->vectorizer->transform($vector);
-        //echo "Vectorizer aplicado.\n";
-
-        //echo "Aplicando feature selector...\n";
         $this->featureSelector->transform($vector);
-        //echo "Feature selector aplicado.\n";
-
-        //echo "Realizando predição...\n";
         $prediction = $this->model->predict($vector);
-        //echo "Predição concluída.\n";
 
         if (is_array($prediction)) {
             return isset($prediction[0]) ? $prediction[0] : null;
@@ -252,7 +245,6 @@ class NextWordPredictor
             return null;
         }
     }
-    
 
     public function removeZeroVarianceFeatures(array &$samples): void
     {
@@ -301,5 +293,4 @@ class NextWordPredictor
 
         echo "Características com variância zero removidas. Novas dimensões: " . count($samples[0]) . "\n";
     }
-
 }

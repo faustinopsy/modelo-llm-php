@@ -11,12 +11,12 @@ $modelPath = $modelDir . '/naive_bayes_model.phpml';
 $vectorizerPath = $modelDir . '/vectorizer.phpml';
 $featureSelectorPath = $modelDir . '/feature_selector.phpml';
 
-// Cria a pasta 'model' se não existir (já tratado na classe)
 if (!is_dir($modelDir)) {
     mkdir($modelDir, 0755, true);
 }
 
 $predictor = new NextWordPredictor($ngramPath);
-$predictor->train();
+//ajuste 0 ou 2 para um modelo maior
+$predictor->train(true, 3);
 $predictor->saveModel($modelPath, $vectorizerPath, $featureSelectorPath);
 ?>
