@@ -9,8 +9,8 @@ $modelDir = 'model';
 $modelPath = $modelDir . '/naive_bayes_model.phpml';
 $vectorizerPath = $modelDir . '/vectorizer.phpml';
 $featureSelectorPath = $modelDir . '/feature_selector.phpml';
-$initialContext = 'o presidente lula';
-$desiredLength = 10;
+$initialContext = 'lula';
+$desiredLength = 20;
 
 $predictor = new NextWordPredictor('');
 $predictor->loadModel($modelPath, $vectorizerPath, $featureSelectorPath);
@@ -19,7 +19,7 @@ $phrase = explode(' ', $initialContext);
 
 // Gerar palavras até alcançar o comprimento desejado
 while (count($phrase) < $desiredLength) {
-    $contextWords = array_slice($phrase, -3, 1);
+    $contextWords = array_slice($phrase, -2);
     $context = implode(' ', $contextWords);
     
     $nextWord = $predictor->predict($context);

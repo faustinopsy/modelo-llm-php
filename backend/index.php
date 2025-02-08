@@ -48,16 +48,16 @@ function sendSSEMessage($message) {
 
 function extractInitialContext($questao) {
     $palavrasQuestao = explode(' ', strtolower($questao));
-    $initialpalavraContexto = array_slice($palavrasQuestao, -2, 2);
+    $initialpalavraContexto = array_slice($palavrasQuestao, -2);
     $contextoInicial = implode(' ', $initialpalavraContexto);
-    if (count($initialpalavraContexto) < 2) {
+    if (count($initialpalavraContexto) < 1) {
         $contextoInicial .= ' > ';
     }
     return $contextoInicial;
 }
 
-$initialContext = extractInitialContext($question);
-$tamanhoFrase = 20;
+$initialContext = extractInitialContext($questao);
+$tamanhoFrase = 25;
 $frase = explode(' ', $initialContext);
 
 foreach ($frase as $word) {
@@ -76,7 +76,7 @@ while (count($frase) < $tamanhoFrase) {
     
     $frase[] = $proximaPalavra;
     sendSSEMessage($proximaPalavra);
-    usleep(20000); // 200ms
+    usleep(10000); // 100ms
 }
 
 sendSSEMessage('[END]');

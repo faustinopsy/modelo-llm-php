@@ -9,6 +9,7 @@ class NGramProcessor
     private $ngrams;
     private $tokenizer;
     private $n;
+    private $stopWords;
 
     public function __construct(string $jsonFile, int $n = 3)
     {
@@ -16,6 +17,7 @@ class NGramProcessor
         $this->ngrams = [];
         $this->tokenizer = new WordTokenizer();
         $this->n = $n;
+        $this->stopWords = ['de', 'dos', 'das', 'que' , 'do'];
     }
 
     public function process(): void
@@ -41,7 +43,11 @@ class NGramProcessor
                 $tokens = array_filter($tokens, function($token) {
                     return preg_match('/^[a-zá-ú]+$/u', $token);
                 });
-                $entryNGrams = $this->createNGrams(array_values($tokens), $this->n);
+                $tokens = array_filter($tokens, function($token) {
+                    return !in_array(strtolower($token), $this->stopWords);
+                });
+                $tokens = array_values($tokens);
+                $entryNGrams = $this->createNGrams($tokens, $this->n);
                 $this->ngrams = array_merge($this->ngrams, $entryNGrams);
             }
             if ($current % 1000 === 0) {
@@ -67,7 +73,7 @@ class NGramProcessor
         return array_count_values($this->ngrams);
     }
 
-    public function saveFrequencies(string $outputFile, int $limit = 20478): void
+    public function saveFrequencies(string $outputFile, int $limit): void
     {
         $frequencies = $this->countFrequencies();
         arsort($frequencies);

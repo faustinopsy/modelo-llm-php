@@ -17,6 +17,6 @@ if (!is_dir($modelDir)) {
 
 $predictor = new NextWordPredictor($ngramPath);
 //ajuste 0 ou 2 para um modelo maior
-$predictor->train(true, 3);
+$predictor->train(true, 2);
 $predictor->saveModel($modelPath, $vectorizerPath, $featureSelectorPath);
 ?>

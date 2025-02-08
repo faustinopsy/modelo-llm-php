@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <title>Chat-GPT Feito em Casa</title>
-  <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/echarts@latest/dist/echarts.min.js"></script>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
   <style>
     body {
@@ -36,10 +36,11 @@
       color: yellow;
       margin-top: 10px;
     }
-    #faceGraph {
-      width: 80%;
+    #faceGraph, #Graph {
+      width: 800px;
       height: 600px;
-      margin: 30px auto 0 auto;
+      margin: auto;
+      margin-top: 20px;
     }
   </style>
 </head>
@@ -58,10 +59,85 @@
         <div id="loading">Processando... Aguarde.</div>
       </div>
     </div>
+    <div id="Graph"></div>
     <div id="faceGraph"></div>
+    
   </div>
 
   <script>
+    /************ GRÁFICO DINÂMICO (Graph) - Atualização via chat ************/
+    // Variáveis globais para o gráfico dinâmico
+    let dynamicChart;
+    let dynamicNodes = [];
+    let dynamicEdges = [];
+    let nextX = 50;      // coordenada X inicial para novos nós
+    const fixedY = 300;  // coordenada Y fixa
+    let lastNodeId = null;  // id do último nó adicionado na cadeia
+
+    function initDynamicGraph() {
+      var chart = document.getElementById('Graph');
+      dynamicChart = echarts.init(chart);
+      var option = {
+        title: { text: 'Cadeia de Palavras do Chat', textStyle: { color: '#fff' } },
+        tooltip: {},
+        series: [{
+          type: 'graph',
+          layout: 'none',
+          roam: true,
+          data: dynamicNodes,
+          links: dynamicEdges,
+          label: { show: true, position: 'right' },
+          lineStyle: {
+            width: 0.5,
+            curveness: 0.3,
+            opacity: 0.7
+          }
+        }],
+        backgroundColor: '#222'
+      };
+      dynamicChart.setOption(option);
+    }
+
+    function updateDynamicGraph(newWord) {
+      if (!newWord) return;
+      
+      let existingIndex = dynamicNodes.findIndex(node => node.name === newWord);
+      let currentNode;
+      if (existingIndex !== -1) {
+        currentNode = dynamicNodes[existingIndex];
+        currentNode.symbolSize = (currentNode.symbolSize || 20) + 10; 
+      } else {
+        currentNode = {
+          id: String(dynamicNodes.length),
+          name: newWord,
+          symbolSize: 20,
+          x: nextX,
+          y: fixedY
+        };
+        dynamicNodes.push(currentNode);
+        nextX += 100;
+      }
+      
+      if (lastNodeId !== null && lastNodeId !== currentNode.id) {
+        let edgeExists = dynamicEdges.some(edge => edge.source === lastNodeId && edge.target === currentNode.id);
+        if (!edgeExists) {
+          dynamicEdges.push({
+            source: lastNodeId,
+            target: currentNode.id
+          });
+        }
+      }
+      
+      lastNodeId = currentNode.id;
+      dynamicChart.setOption({
+        series: [{
+          data: dynamicNodes,
+          links: dynamicEdges
+        }]
+      });
+    }
+
+    /************ ENVIO DA PERGUNTA E RECEPÇÃO DE PALAVRAS DO CHAT ************/
     function sendQuestion() {
       const pergunta = document.getElementById('pergunta').value;
       const sendButton = document.getElementById('sendButton');
@@ -86,6 +162,12 @@
           return;
         }
         responseElement.textContent += event.data + ' ';
+        const words = event.data.trim().split(/\s+/);
+        words.forEach(word => {
+          if (word) {
+            updateDynamicGraph(word);
+          }
+        });
       };
 
       eventSource.onerror = function(err) {
@@ -97,113 +179,129 @@
       };
     }
 
-    function renderNgramGraph() {
+    /************ GRÁFICO DOS N-GRAMS (faceGraph) - Mantido como estava ************/
+    function processNgramData(ngramData) {
+      const nodes = {};  // { palavra: { name: palavra, frequency: acumulado } }
+      const edges = [];  // cada aresta liga palavras adjacentes de um n-gram
+
+      for (const phrase in ngramData) {
+        const count = ngramData[phrase];
+        const words = phrase.split(' ');
+        words.forEach(word => {
+          if (!nodes[word]) {
+            nodes[word] = { name: word, frequency: 0 };
+          }
+          nodes[word].frequency += count;
+        });
+        for (let i = 0; i < words.length - 1; i++) {
+          edges.push({
+            source: words[i],
+            target: words[i + 1],
+            weight: count
+          });
+        }
+      }
+      
+      const sortedNodeKeys = Object.keys(nodes).sort((a, b) => nodes[b].frequency - nodes[a].frequency);
+      const topCategories = sortedNodeKeys.slice(0, 10);
+      const categories = topCategories.map(word => ({ name: word }));
+      categories.push({ name: "Outros" });
+      
+      for (const word in nodes) {
+        if (topCategories.includes(word)) {
+          nodes[word].category = word;
+        } else {
+          const categoryWeights = {};
+          topCategories.forEach(cat => { categoryWeights[cat] = 0; });
+          edges.forEach(edge => {
+            if (edge.source === word && topCategories.includes(edge.target)) {
+              categoryWeights[edge.target] += edge.weight;
+            }
+            if (edge.target === word && topCategories.includes(edge.source)) {
+              categoryWeights[edge.source] += edge.weight;
+            }
+          });
+          let bestCategory = "Outros";
+          let maxWeight = 0;
+          for (const cat in categoryWeights) {
+            if (categoryWeights[cat] > maxWeight) {
+              maxWeight = categoryWeights[cat];
+              bestCategory = cat;
+            }
+          }
+          nodes[word].category = bestCategory;
+        }
+      }
+      
+      const nodesArray = Object.keys(nodes).map(word => {
+        return {
+          name: nodes[word].name,
+          value: nodes[word].frequency,
+          category: nodes[word].category
+        };
+      });
+      
+      return { nodesArray, edges, categories };
+    }
+    
+    function renderGraph() {
       fetch('backend/ngramsmil.json')
         .then(response => response.json())
         .then(ngramData => {
-          // Construção de nós e ligações (arestas) a partir dos n-grams:
-          const nodes = {};  // { palavra: { name: palavra, frequency: acumulado } }
-          const edges = [];  // Cada aresta ligará palavras adjacentes de um n-gram
-
-          for (const phrase in ngramData) {
-            const count = ngramData[phrase];
-            const words = phrase.split(' ');
-            words.forEach(word => {
-              if (!nodes[word]) {
-                nodes[word] = { name: word, frequency: 0 };
-              }
-              nodes[word].frequency += count;
-            });
-            
-            for (let i = 0; i < words.length - 1; i++) {
-              edges.push({
-                source: words[i],
-                target: words[i + 1],
-                weight: count
-              });
-            }
-          }
-
-          const nodeKeys = Object.keys(nodes);
-          const totalNodes = nodeKeys.length;
-          const nodeArray = nodeKeys.map((key, index) => {
-            const angle = 2 * Math.PI * index / totalNodes;
-            const radius = 5;
-            return {
-              id: key,
-              frequency: nodes[key].frequency,
-              x: radius * Math.cos(angle),
-              y: radius * Math.sin(angle),
-              z: nodes[key].frequency
-            };
-          });
-
-          const nodePositions = {};
-          nodeArray.forEach(node => {
-            nodePositions[node.id] = { x: node.x, y: node.y, z: node.z };
-          });
-
-          const edgeTraces = [];
-          edges.forEach(edge => {
-            const sourcePos = nodePositions[edge.source];
-            const targetPos = nodePositions[edge.target];
-            if (sourcePos && targetPos) {
-              edgeTraces.push({
-                x: [sourcePos.x, targetPos.x, null],
-                y: [sourcePos.y, targetPos.y, null],
-                z: [sourcePos.z, targetPos.z, null],
-                mode: 'lines',
-                line: {
-                  color: 'gray',
-                  width: 1 + Math.log(edge.weight)
+          console.log("Ngram Data:", ngramData);
+          const { nodesArray, edges, categories } = processNgramData(ngramData);
+          
+          console.log("Nodes:", nodesArray);
+          console.log("Edges:", edges);
+          console.log("Categories:", categories);
+          
+          var chartDom = document.getElementById('faceGraph');
+          var myChart = echarts.init(chartDom);
+          
+          var option = {
+            title: {
+              text: 'N-Grams',
+              bottom: 'left',
+              textStyle: { color: '#fff' }
+            },
+            tooltip: {},
+            legend: {
+              data: categories.map(a => a.name),
+              textStyle: { color: '#fff' },
+              selectedMode: 'multiple'
+            },
+            series: [
+              {
+                name: 'Grupos',
+                type: 'graph',
+                layout: 'force',
+                data: nodesArray,
+                links: edges,
+                categories: categories,
+                roam: true,
+                label: {
+                  show: true,
+                  position: 'right'
                 },
-                type: 'scatter3d',
-                hoverinfo: 'none',
-                showlegend: false
-              });
-            }
-          });
-
-          const nodeTrace = {
-            x: nodeArray.map(node => node.x),
-            y: nodeArray.map(node => node.y),
-            z: nodeArray.map(node => node.z),
-            text: nodeArray.map(node => node.id),
-            mode: 'markers+text',
-            textposition: 'top center',
-            marker: {
-              size: nodeArray.map(node => 5 + Math.log(node.frequency)),
-              color: 'orange',
-              opacity: 0.8
-            },
-            type: 'scatter3d',
-            hoverinfo: 'text'
+                force: { repulsion: 150 },
+                emphasis: {
+                  focus: 'adjacency',
+                  label: { position: 'right', show: true }
+                }
+              }
+            ],
+            backgroundColor: '#222'
           };
-
-          const layout = {
-            title: "Mapa de N-Grams",
-            scene: {
-              xaxis: { title: "X", zeroline: false },
-              yaxis: { title: "Y", zeroline: false },
-              zaxis: { title: "Z", zeroline: false }
-            },
-            margin: { l: 0, r: 0, b: 0, t: 40 },
-            paper_bgcolor: '#222',
-            plot_bgcolor: '#222',
-            font: { color: '#aff' }
-          };
-
-          const data = [nodeTrace, ...edgeTraces];
-          Plotly.newPlot("faceGraph", data, layout);
+          
+          myChart.setOption(option);
         })
         .catch(err => {
           console.error("Erro ao carregar n-grams:", err);
         });
     }
-
-    document.addEventListener('DOMContentLoaded', function() {
-      renderNgramGraph();
-    });
+    
+    renderGraph();
+    initDynamicGraph();
   </script>
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 </body>

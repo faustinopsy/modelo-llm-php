@@ -248,3 +248,11 @@ Mas o notável — e inesperado — é que esse processo pode produzir texto que
 A engenharia específica do ChatGPT o tornou bastante atraente. 
 Mas, no final das contas (pelo menos até que possa usar ferramentas externas), o ChatGPT está “meramente” extraindo algum “fio coerente de texto” das “estatísticas da sabedoria convencional” que ele acumulou. 
 Mas é incrível como os resultados são semelhantes aos humanos.”
+```
+
+## novas funcionalidades
+graficos dos Ngrams
+
+![fluxo de palavras](img/graphword.png)
+
+![ngrams](img/ngrans.png)
